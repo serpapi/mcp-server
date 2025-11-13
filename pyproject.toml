@@ -40,10 +40,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ilyazub/serpapi-mcp-server"
-Repository = "https://github.com/ilyazub/serpapi-mcp-server"
-Issues = "https://github.com/ilyazub/serpapi-mcp-server/issues"
-Documentation = "https://github.com/ilyazub/serpapi-mcp-server#readme"
+Homepage = "https://github.com/serpapi/mcp-server"
+Repository = "https://github.com/serpapi/mcp-server"
+Issues = "https://github.com/serpapi/mcp-server/issues"
+Documentation = "https://github.com/serpapi/mcp-server#readme"
 
 [project.scripts]
 serpapi-mcp = "src.server:main"
