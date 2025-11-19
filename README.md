@@ -27,22 +27,24 @@ uv sync
 
 ## Configuration
 
-### Environment Variables
+### API Key Authentication
+
+This server supports two methods for providing your SerpApi API key:
+
+1. **Path-based** (recommended): Include your API key directly in the URL path
+2. **Header-based**: Pass your API key in the Authorization header
 
 #### Required
-- `SERPAPI_API_KEY`: Your SerpApi API key from [serpapi.com/manage-api-key](https://serpapi.com/manage-api-key)
+- **SerpApi API Key**: Get your API key from [serpapi.com/manage-api-key](https://serpapi.com/manage-api-key)
 
 ### Setup Steps
 
 1. **Get API Key**: Sign up at [SerpApi](https://serpapi.com) and get your API key
-2. **Create .env file**:
-   ```bash
-   SERPAPI_API_KEY=your_api_key_here
-   ```
-3. **Run Server**:
+2. **Run Server**:
    ```bash
    uv run src/server.py
    ```
+3. **Access with API Key**: Use either method below to authenticate your requests
 
 ## Running with Docker
 
@@ -50,13 +52,17 @@ uv sync
 # Build the image
 docker build -t serpapi-mcp-server .
 
-# Run the container
-docker run -e SERPAPI_API_KEY=<your_api_key> -p 8000:8000 serpapi-mcp-server
+# Run the container (no environment variables needed)
+docker run -p 8000:8000 serpapi-mcp-server
 ```
+
+The server will be available at `http://localhost:8000`. Include your API key in the request path or headers as shown below.
 
 ## Client Configurations
 
 ### Claude Desktop
+
+#### Method 1: Path-based API Key (Recommended)
 
 Add to your `claude_desktop_config.json`:
 
@@ -64,16 +70,65 @@ Add to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "serpapi": {
-      "command": "uv",
-      "args": ["run", "/path/to/mcp-server/src/server.py"],
-      "env": {
-        "SERPAPI_API_KEY": "your_api_key_here"
+      "url": "http://localhost:8000/YOUR_SERPAPI_API_KEY/v1/mcp"
+    }
+  }
+}
+```
+
+#### Method 2: Authorization Header
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "serpapi": {
+      "url": "http://localhost:8000/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_SERPAPI_API_KEY"
       }
     }
   }
 }
 ```
 
+### Production Deployment
+
+For production deployments, use your domain:
+
+```json
+{
+  "mcpServers": {
+    "serpapi": {
+      "url": "https://yourdomain.com/YOUR_SERPAPI_API_KEY/v1/mcp"
+    }
+  }
+}
+```
+
+## Authentication Examples
+
+### cURL Examples
+
+#### Path-based Authentication
+```bash
+curl -X POST "http://localhost:8000/your_serpapi_key/v1/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"method": "tools/call", "params": {"name": "search", "arguments": {"params": {"q": "weather in London"}}}}'
+```
+
+#### Header-based Authentication
+```bash
+curl -X POST "http://localhost:8000/v1/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_serpapi_key" \
+  -d '{"method": "tools/call", "params": {"name": "search", "arguments": {"params": {"q": "weather in London"}}}}'
+```
+
+### Client Library Examples
+
+Both authentication methods work seamlessly with MCP clients. The server automatically detects and validates your API key from either the URL path or Authorization header.
 
 ## Available Tools
 
@@ -231,7 +286,11 @@ npm install -g @modelcontextprotocol/inspector
 npx @modelcontextprotocol/inspector
 ```
 
-Then configure: URL `localhost:8000/mcp`, Transport "Streamable HTTP transport", and click "List tools".
+Then configure: 
+- **Path-based**: URL `localhost:8000/YOUR_API_KEY/v1/mcp`, Transport "Streamable HTTP transport"
+- **Header-based**: URL `localhost:8000/v1/mcp`, Transport "Streamable HTTP transport", and add Authorization header `Bearer YOUR_API_KEY`
+
+Click "List tools" to start testing.
 
 ### Project Structure
 
@@ -296,9 +355,15 @@ raw_data = await client.call_tool("search", {
 
 ### Common Issues
 
-**"Invalid API key" Error:**
+**"Missing API key" Error:**
+- Ensure your API key is included in the URL path: `/{YOUR_API_KEY}/v1/mcp`
+- Or verify the Authorization header: `Bearer YOUR_API_KEY`
 - Verify your API key at [serpapi.com/manage-api-key](https://serpapi.com/manage-api-key)
-- Check that `SERPAPI_API_KEY` is set in your environment
+
+**"Invalid SerpApi API key" Error:**
+- Check your API key is valid at [serpapi.com/manage-api-key](https://serpapi.com/manage-api-key)
+- Ensure the API key in the path or header is correctly formatted
+- Verify your SerpApi subscription is active
 
 **"Rate limit exceeded" Error:**
 - Wait for the retry period

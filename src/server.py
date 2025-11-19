@@ -1,5 +1,8 @@
 import uvicorn
+from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from fastmcp import FastMCP
 from dotenv import load_dotenv
 import os
@@ -7,16 +10,44 @@ import json
 from typing import Dict, Any
 from serpapi import SerpApiClient as SerpApiSearch
 import httpx
+import logging
 
 load_dotenv()
-API_KEY = os.getenv("SERPAPI_API_KEY")
-
-if not API_KEY:
-    raise ValueError(
-        "SERPAPI_API_KEY not found in environment variables. Please set it in the .env file."
-    )
 
 mcp = FastMCP("SerpApi MCP Server", stateless_http=True, json_response=True)
+logger = logging.getLogger(__name__)
+
+
+class ApiKeyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        api_key = None
+
+        auth = request.headers.get("Authorization")
+        if auth and auth.startswith("Bearer "):
+            api_key = auth.split(" ", 1)[1].strip()
+
+        original_path = request.scope.get("path", "")
+        path_parts = original_path.strip("/").split("/") if original_path else []
+
+        if not api_key and len(path_parts) >= 2 and path_parts[1] == "mcp":
+            api_key = path_parts[0]
+
+            new_path = "/" + "/".join(path_parts[1:])
+            request.scope["path"] = new_path
+            request.scope["raw_path"] = new_path.encode("utf-8")
+
+        # 3. Validate API key exists
+        if not api_key:
+            return JSONResponse(
+                {
+                    "error": "Missing API key. Use path format /{API_KEY}/v1/mcp or Authorization: Bearer {API_KEY}"
+                },
+                status_code=401,
+            )
+
+        # Store API key in request state for tools to access
+        request.state.api_key = api_key
+        return await call_next(request)
 
 
 def format_answer_box(answer_box: Dict[str, Any]) -> str:
@@ -111,7 +142,7 @@ def format_images_results(images_results: list) -> str:
 
 
 @mcp.tool()
-async def search(params: Dict[str, Any] = {}, raw: bool = False) -> str:
+async def search(params: Dict[str, Any] = {}, raw: bool = False, ctx=None) -> str:
     """Universal search tool supporting all SerpApi engines and result types.
 
     This tool consolidates weather, stock, and general search functionality into a single interface.
@@ -135,8 +166,13 @@ async def search(params: Dict[str, Any] = {}, raw: bool = False) -> str:
         General: {"q": "coffee shops", "engine": "google_light", "location": "Austin, TX"}
     """
 
+    if ctx and hasattr(ctx, "http_request") and hasattr(ctx.http_request, "state"):
+        api_key = ctx.http_request.state.api_key
+    else:
+        return "Error: Unable to access API key from request context"
+
     search_params = {
-        "api_key": API_KEY,
+        "api_key": api_key,
         "engine": "google_light",  # Fastest engine by default
         **params,  # Include any additional parameters
     }
@@ -200,7 +236,9 @@ async def search(params: Dict[str, Any] = {}, raw: bool = False) -> str:
         if e.response.status_code == 429:
             return "Error: Rate limit exceeded. Please try again later."
         elif e.response.status_code == 401:
-            return "Error: Invalid API key. Please check your SERPAPI_API_KEY."
+            return "Error: Invalid SerpApi API key. Check your API key in the path or Authorization header."
+        elif e.response.status_code == 403:
+            return "Error: SerpApi API key forbidden. Verify your subscription and key validity."
         else:
             return f"Error: {e.response.status_code} - {e.response.text}"
     except Exception as e:
@@ -208,15 +246,17 @@ async def search(params: Dict[str, Any] = {}, raw: bool = False) -> str:
 
 
 def main():
-    starlette_app = mcp.http_app()
-
-    starlette_app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    middleware = [
+        Middleware(ApiKeyMiddleware),
+        Middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        ),
+    ]
+    starlette_app = mcp.http_app(middleware=middleware)
 
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8000"))
