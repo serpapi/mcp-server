@@ -3,11 +3,13 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+from starlette.requests import Request
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_http_request
 from dotenv import load_dotenv
 import os
 import json
-from typing import Dict, Any
+from typing import Any
 from serpapi import SerpApiClient as SerpApiSearch
 import httpx
 import logging
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
+    async def dispatch(self, request: Request, call_next):
         # Skip authentication for healthcheck endpoint
         if request.url.path == "/healthcheck":
             return await call_next(request)
@@ -45,7 +47,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         if not api_key:
             return JSONResponse(
                 {
-                    "error": "Missing API key. Use path format /{API_KEY}/v1/mcp or Authorization: Bearer {API_KEY}"
+                    "error": "Missing API key. Use path format /{API_KEY}/mcp or Authorization: Bearer {API_KEY} header"
                 },
                 status_code=401,
             )
@@ -55,7 +57,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def format_answer_box(answer_box: Dict[str, Any]) -> str:
+def format_answer_box(answer_box: dict[str, Any]) -> str:
     """Format answer_box results for weather, finance, and other structured data."""
     if answer_box.get("type") == "weather_result":
         result = f"Temperature: {answer_box.get('temperature', 'N/A')}\n"
@@ -107,7 +109,7 @@ def format_answer_box(answer_box: Dict[str, Any]) -> str:
         return result
 
 
-def format_organic_results(organic_results: list) -> str:
+def format_organic_results(organic_results: list[Any]) -> str:
     """Format organic search results."""
     formatted_results = []
     for result in organic_results:
@@ -118,7 +120,7 @@ def format_organic_results(organic_results: list) -> str:
     return "\n".join(formatted_results) if formatted_results else ""
 
 
-def format_news_results(news_results: list) -> str:
+def format_news_results(news_results: list[Any]) -> str:
     """Format news search results."""
     formatted_results = []
     for result in news_results:
@@ -133,7 +135,7 @@ def format_news_results(news_results: list) -> str:
     return "\n".join(formatted_results) if formatted_results else ""
 
 
-def format_images_results(images_results: list) -> str:
+def format_images_results(images_results: list[Any]) -> str:
     """Format image search results."""
     formatted_results = []
     for result in images_results:
@@ -147,7 +149,7 @@ def format_images_results(images_results: list) -> str:
 
 
 @mcp.tool()
-async def search(params: Dict[str, Any] = {}, raw: bool = False, ctx=None) -> str:
+async def search(params: dict[str, Any] = {}, raw: bool = False) -> str:
     """Universal search tool supporting all SerpApi engines and result types.
 
     This tool consolidates weather, stock, and general search functionality into a single interface.
@@ -171,8 +173,9 @@ async def search(params: Dict[str, Any] = {}, raw: bool = False, ctx=None) -> st
         General: {"q": "coffee shops", "engine": "google_light", "location": "Austin, TX"}
     """
 
-    if ctx and hasattr(ctx, "http_request") and hasattr(ctx.http_request, "state"):
-        api_key = ctx.http_request.state.api_key
+    request = get_http_request()
+    if hasattr(request, "state") and request.state.api_key:
+        api_key = request.state.api_key
     else:
         return "Error: Unable to access API key from request context"
 
