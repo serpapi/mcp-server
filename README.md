@@ -11,8 +11,8 @@ A Model Context Protocol (MCP) server implementation that integrates with [SerpA
 - **Real-time Weather Data**: Location-based weather with forecasts via search queries
 - **Stock Market Data**: Company financials and market data through search integration
 - **Dynamic Result Processing**: Automatically detects and formats different result types
-- **Raw JSON Support**: Option to return full unprocessed API responses
-- **Structured Results**: Clean, formatted output optimized for AI consumption
+- **Flexible Response Modes**: Complete or compact JSON responses
+- **JSON Responses**: Structured JSON output with complete or compact modes
 
 ## Quick Start
 
@@ -74,7 +74,7 @@ The parameters you can provide are specific for each API engine. Some sample par
 - `params.q` (required): Search query
 - `params.engine`: Search engine (default: "google_light") 
 - `params.location`: Geographic filter
-- `raw`: Return raw JSON (default: false)
+- `mode`: Response mode - "complete" (default) or "compact"
 - ...see other parameters on the [SerpApi API reference](https://serpapi.com/search-api)
 
 **Examples:**
@@ -83,7 +83,8 @@ The parameters you can provide are specific for each API engine. Some sample par
 {"name": "search", "arguments": {"params": {"q": "coffee shops", "location": "Austin, TX"}}}
 {"name": "search", "arguments": {"params": {"q": "weather in London"}}}
 {"name": "search", "arguments": {"params": {"q": "AAPL stock"}}}
-{"name": "search", "arguments": {"params": {"q": "news"}, "raw": true}}
+{"name": "search", "arguments": {"params": {"q": "news"}, "mode": "compact"}}
+{"name": "search", "arguments": {"params": {"q": "detailed search"}, "mode": "complete"}}
 ```
 
 **Supported Engines:** Google, Bing, Yahoo, DuckDuckGo, YouTube, eBay, and more.
