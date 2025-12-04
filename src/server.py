@@ -11,7 +11,6 @@ import os
 import json
 from typing import Any
 import serpapi
-import httpx
 import logging
 from datetime import datetime
 
@@ -19,6 +18,44 @@ load_dotenv()
 
 mcp = FastMCP("SerpApi MCP Server", stateless_http=True, json_response=True)
 logger = logging.getLogger(__name__)
+
+
+def extract_error_response(exception) -> str:
+    """
+    Helper function to extract meaningful error information from nested exceptions.
+
+    Traverses exception.args[0] chain until it finds a valid .response object,
+    then attempts to extract JSON from response.json(). Falls back to str(e).
+
+    Args:
+        exception: The exception to process
+
+    Returns:
+        str: Formatted error message with response data if available
+    """
+    current = exception
+    max_depth = 10
+    depth = 0
+
+    while depth < max_depth:
+        if hasattr(current, "response") and current.response is not None:
+            try:
+                response_data = current.response.json()
+                return json.dumps(response_data, indent=2)
+            except (ValueError, AttributeError, TypeError):
+                try:
+                    return current.response.text
+                except (AttributeError, TypeError):
+                    pass
+
+        if hasattr(current, "args") and current.args and len(current.args) > 0:
+            current = current.args[0]
+            depth += 1
+        else:
+            break
+
+    # Fallback
+    return str(exception)
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
@@ -139,15 +176,17 @@ async def search(params: dict[str, Any] = {}, mode: str = "complete") -> str:
 
     except serpapi.exceptions.HTTPError as e:
         if "429" in str(e):
-            return "Error: Rate limit exceeded. Please try again later."
+            return f"Error: Rate limit exceeded. Please try again later."
         elif "401" in str(e):
-            return "Error: Invalid SerpApi API key. Check your API key in the path or Authorization header."
+            return f"Error: Invalid SerpApi API key. Check your API key in the path or Authorization header."
         elif "403" in str(e):
-            return "Error: SerpApi API key forbidden. Verify your subscription and key validity."
+            return f"Error: SerpApi API key forbidden. Verify your subscription and key validity."
         else:
-            return f"Error: {str(e)}"
+            error_msg = extract_error_response(e)
+            return f"Error: {error_msg}"
     except Exception as e:
-        return f"Error: {str(e)}"
+        error_msg = extract_error_response(e)
+        return f"Error: {error_msg}"
 
 
 async def healthcheck_handler(request):
