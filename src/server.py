@@ -16,7 +16,7 @@ from datetime import datetime
 
 load_dotenv()
 
-mcp = FastMCP("SerpApi MCP Server", stateless_http=True, json_response=True)
+mcp = FastMCP("SerpApi MCP Server")
 logger = logging.getLogger(__name__)
 
 
@@ -210,14 +210,16 @@ def main():
             allow_headers=["*"],
         ),
     ]
-    starlette_app = mcp.http_app(middleware=middleware)
+    starlette_app = mcp.http_app(
+        middleware=middleware, stateless_http=True, json_response=True
+    )
 
     starlette_app.add_route("/healthcheck", healthcheck_handler, methods=["GET"])
 
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8000"))
 
-    uvicorn.run(starlette_app, host=host, port=port)
+    uvicorn.run(starlette_app, host=host, port=port, ws="none")
 
 
 if __name__ == "__main__":
